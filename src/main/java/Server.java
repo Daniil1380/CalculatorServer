@@ -20,7 +20,7 @@ public class Server {
             Thread thread = new Thread(() -> {
                 try {
                     work(socket);
-                } catch (IOException | InterruptedException exception) {
+                } catch (IOException exception) {
                     exception.printStackTrace();
                 }
             });
@@ -28,7 +28,7 @@ public class Server {
         }
     }
 
-    private static void work(Socket socket) throws IOException, InterruptedException {
+    private static void work(Socket socket) throws IOException {
         InputStream inputStream = socket.getInputStream();
         OutputStream outputStream = socket.getOutputStream();
         while (!Thread.interrupted()) {
@@ -53,6 +53,7 @@ public class Server {
                             calculateFast(calculatorPackage.getFirstArgument(), calculatorPackage.getSecondArgument(),
                                     calculatorPackage.getOperation()));
                 }
+                System.out.println(answer.toString());
                 answer.setSpeed((byte) 0);
                 outputStream.write(answer.toByte());
             }
@@ -65,13 +66,13 @@ public class Server {
                         long thenNeedToSend = now + 1000 * calculatorPackage.getTime();
 
                         Thread timer = new Thread(()->{
-                            boolean notDelivered = true;
-                            while (notDelivered) {
+                            boolean stopWatch = true;
+                            while (stopWatch) {
                                 try {
                                     Thread.sleep(1000);
                                     if (thenNeedToSend < System.currentTimeMillis()) {
                                         answer.setError((byte) 6);
-                                        notDelivered = false;
+                                        stopWatch = false;
                                     }
                                 } catch (InterruptedException e) {
                                     e.printStackTrace();
@@ -97,11 +98,12 @@ public class Server {
                             bytes.add(calculatorPackage.getId());
                         }
                         answer.setId(calculatorPackage.getId());
-                        if (answer.getOperation() > 1){
+                        if (answer.getOperation() > 1) {
                             answer.setError((byte) 1);
                         }
                         else {
-                            answer.setFirstArgument(calculateSlow(answer.getFirstArgument(), answer.getSecondArgument(), answer.getOperation()));
+                            answer.setFirstArgument(calculateSlow(calculatorPackage.getFirstArgument(),
+                                    calculatorPackage.getSecondArgument(), calculatorPackage.getOperation()));
                         }
                         answer.setSpeed((byte) 0);
                         outputStream.write(answer.toByte());
@@ -111,8 +113,6 @@ public class Server {
                     }
                 });
                 thread.start();
-
-
             }
         }
 
