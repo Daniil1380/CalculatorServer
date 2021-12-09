@@ -40,7 +40,7 @@ public class Server {
                 if (calculatorPackage.getSecondArgument() == 0 && calculatorPackage.getOperation() == 3) {
                     answer.setError((byte) 2);
                     answer.setSpeed((byte) 0);
-                    outputStream.write(answer.toByte());
+                    write(answer, outputStream);
                     return;
                 }
                 if (calculatorPackage.getFirstArgument() == 1992 && calculatorPackage.getOperation() == 3
@@ -53,9 +53,7 @@ public class Server {
                             calculateFast(calculatorPackage.getFirstArgument(), calculatorPackage.getSecondArgument(),
                                     calculatorPackage.getOperation()));
                 }
-                System.out.println(answer.toString());
-                answer.setSpeed((byte) 0);
-                outputStream.write(answer.toByte());
+                write(answer, outputStream);
             }
             else {
                 Thread thread = new Thread(() -> {
@@ -85,13 +83,13 @@ public class Server {
                         if (bytes.contains(calculatorPackage.getId())) {
                             answer.setError((byte) 4);
                             answer.setId(calculatorPackage.getId());
-                            outputStream.write(answer.toByte());
+                            write(answer, outputStream);
                             return;
                         }
                         if ((int) calculatorPackage.getFirstArgument() != calculatorPackage.getFirstArgument()) {
                             answer.setError((byte) 3);
                             answer.setId(calculatorPackage.getId());
-                            outputStream.write(answer.toByte());
+                            write(answer, outputStream);
                             return;
                         }
                         else {
@@ -102,13 +100,12 @@ public class Server {
                             answer.setError((byte) 1);
                         }
                         else {
-                            answer.setFirstArgument(calculateSlow(calculatorPackage.getFirstArgument(),
-                                    calculatorPackage.getSecondArgument(), calculatorPackage.getOperation()));
+                            answer.setFirstArgument(calculateSlow(calculatorPackage, answer));
                         }
                         answer.setSpeed((byte) 0);
-                        outputStream.write(answer.toByte());
+                        write(answer, outputStream);
                     }
-                    catch (IOException e){
+                    catch (IOException | InterruptedException e){
                         e.printStackTrace();
                     }
                 });
@@ -133,22 +130,31 @@ public class Server {
         return 0.0;
     }
 
-    private static double calculateSlow(Double first, Double second, byte operation) {
-        switch (operation){
+    private static double calculateSlow(CalculatorPackage calculatorPackage, CalculatorPackage answerPackage) throws InterruptedException {
+        switch (calculatorPackage.getOperation()){
             case 0:
-                return Math.sqrt(first);
+                return Math.sqrt(calculatorPackage.getFirstArgument());
             case 1:
-                return fact(first);
+                return fact(calculatorPackage, answerPackage);
         }
         return 0.0;
     }
 
-    private static double fact(Double first) {
-        int firstInt = first.intValue();
+    private static double fact(CalculatorPackage calculatorPackage, CalculatorPackage answerPackage) throws InterruptedException {
+        int firstInt = (int) calculatorPackage.getFirstArgument();
         int answer = 1;
         for (int i = 1; i <= firstInt; i++) {
+            Thread.sleep(1000);
+            if (answerPackage.getError() == 6){
+                return 0;
+            }
             answer *= i;
         }
         return answer;
+    }
+
+    private static void write(CalculatorPackage answer, OutputStream outputStream) throws IOException {
+        System.out.println(answer.toString());
+        outputStream.write(answer.toByte());
     }
 }
