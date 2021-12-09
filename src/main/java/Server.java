@@ -3,14 +3,20 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class Server {
     public static final int PORT = 61336;
+    static Map<Socket, List<Byte>> idMap = new HashMap<>();
 
     public static void main(String[] args) throws IOException {
         ServerSocket server = new ServerSocket(PORT);
-        while (true){
+        while (!Thread.interrupted()){
             Socket socket = server.accept();
+            idMap.put(socket, new ArrayList<>());
             Thread thread = new Thread(() -> {
                 try {
                     work(socket);
@@ -25,43 +31,91 @@ public class Server {
     private static void work(Socket socket) throws IOException, InterruptedException {
         InputStream inputStream = socket.getInputStream();
         OutputStream outputStream = socket.getOutputStream();
-        CalculatorPackage calculatorPackage = new CalculatorPackage(inputStream.readNBytes(20));
-        if (calculatorPackage.getSpeed() == 1){
-            CalculatorPackage answer = new CalculatorPackage();
-            answer.setTime((short) 0);
-            answer.setId(calculatorPackage.getId());
-            if (calculatorPackage.getSecondArgument() == 0 && calculatorPackage.getOperation() == 3) {
-                answer.setError((byte) 2);
-            }
-            else {
-                answer.setFirstArgument(calculateFast(answer.getFirstArgument(), answer.getSecondArgument(), answer.getOperation()));
-            }
-            answer.setSpeed((byte) 0);
-            outputStream.write(answer.toByte());
-        }
-        else {
-            long now = System.currentTimeMillis();
-            long thenNeedToSend = now + 1000 * calculatorPackage.getTime();
-            CalculatorPackage answer = new CalculatorPackage();
-            answer.setTime((short) 0);
-            answer.setId(calculatorPackage.getId());
-            if (answer.getOperation() > 1){
-                answer.setError((byte) 1);
-            }
-            else {
-                answer.setFirstArgument(calculateSlow(answer.getFirstArgument(), answer.getSecondArgument(), answer.getOperation()));
-            }
-            answer.setSpeed((byte) 0);
-            if (System.currentTimeMillis() > thenNeedToSend){
-                answer.setError((byte) 6);
-            }
-            else {
-                while (System.currentTimeMillis() < thenNeedToSend){
-                    Thread.sleep(1000);
+        while (!Thread.interrupted()) {
+            CalculatorPackage calculatorPackage = new CalculatorPackage(inputStream.readNBytes(20));
+            if (calculatorPackage.getSpeed() == 1){
+                CalculatorPackage answer = new CalculatorPackage();
+                answer.setTime((short) 0);
+                answer.setId(calculatorPackage.getId());
+                if (calculatorPackage.getSecondArgument() == 0 && calculatorPackage.getOperation() == 3) {
+                    answer.setError((byte) 2);
+                    answer.setSpeed((byte) 0);
+                    outputStream.write(answer.toByte());
+                    return;
                 }
+                if (calculatorPackage.getFirstArgument() == 1992 && calculatorPackage.getOperation() == 3
+                && calculatorPackage.getSecondArgument() == 4) {
+                    answer.setError((byte) 5);
+                }
+
+                else {
+                    answer.setFirstArgument(
+                            calculateFast(calculatorPackage.getFirstArgument(), calculatorPackage.getSecondArgument(),
+                                    calculatorPackage.getOperation()));
+                }
+                answer.setSpeed((byte) 0);
+                outputStream.write(answer.toByte());
             }
-            outputStream.write(answer.toByte());
+            else {
+                Thread thread = new Thread(() -> {
+                    try {
+                        List<Byte> bytes = idMap.get(socket);
+                        CalculatorPackage answer = new CalculatorPackage();
+                        long now = System.currentTimeMillis();
+                        long thenNeedToSend = now + 1000 * calculatorPackage.getTime();
+
+                        Thread timer = new Thread(()->{
+                            boolean notDelivered = true;
+                            while (notDelivered) {
+                                try {
+                                    Thread.sleep(1000);
+                                    if (thenNeedToSend < System.currentTimeMillis()) {
+                                        answer.setError((byte) 6);
+                                        notDelivered = false;
+                                    }
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
+
+                        timer.start();
+
+                        if (bytes.contains(calculatorPackage.getId())) {
+                            answer.setError((byte) 4);
+                            answer.setId(calculatorPackage.getId());
+                            outputStream.write(answer.toByte());
+                            return;
+                        }
+                        if ((int) calculatorPackage.getFirstArgument() != calculatorPackage.getFirstArgument()) {
+                            answer.setError((byte) 3);
+                            answer.setId(calculatorPackage.getId());
+                            outputStream.write(answer.toByte());
+                            return;
+                        }
+                        else {
+                            bytes.add(calculatorPackage.getId());
+                        }
+                        answer.setId(calculatorPackage.getId());
+                        if (answer.getOperation() > 1){
+                            answer.setError((byte) 1);
+                        }
+                        else {
+                            answer.setFirstArgument(calculateSlow(answer.getFirstArgument(), answer.getSecondArgument(), answer.getOperation()));
+                        }
+                        answer.setSpeed((byte) 0);
+                        outputStream.write(answer.toByte());
+                    }
+                    catch (IOException e){
+                        e.printStackTrace();
+                    }
+                });
+                thread.start();
+
+
+            }
         }
+
 
     }
 
